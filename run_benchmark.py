@@ -104,6 +104,10 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument(
         "--log-level", choices=["DEBUG", "INFO", "WARNING"], default="INFO",
     )
+    p.add_argument(
+        "--save-predictions", action="store_true",
+        help="Save raw per-sample predictions alongside metrics JSON (enables plot regeneration).",
+    )
     return p.parse_args()
 
 
@@ -288,6 +292,28 @@ def _run_quantum(
 
 
 # ---------------------------------------------------------------------------
+# Predictions persistence (enables offline plot regeneration)
+# ---------------------------------------------------------------------------
+
+def _save_predictions(plot_data: list[dict], path: Path) -> None:
+    """Persist per-sample predictions so plots can be regenerated without re-running."""
+    import json as _json
+    serialisable = [
+        {
+            "name":   m["name"],
+            "y_true": m["y_true"].tolist(),
+            "y_pred": m["y_pred"].tolist(),
+            "y_prob": m["y_prob"].tolist(),
+        }
+        for m in plot_data
+    ]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w") as fh:
+        _json.dump(serialisable, fh)
+    logging.info("Predictions saved to %s", path)
+
+
+# ---------------------------------------------------------------------------
 # Plotting
 # ---------------------------------------------------------------------------
 
@@ -365,6 +391,9 @@ def main() -> None:
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     metrics_path = METRICS_DIR / f"benchmark_{timestamp}.json"
     save_metrics_json(results, metrics_path)
+
+    if args.save_predictions:
+        _save_predictions(plot_data, METRICS_DIR / f"predictions_{timestamp}.json")
 
     if not args.no_plots:
         _generate_plots(plot_data, results)
