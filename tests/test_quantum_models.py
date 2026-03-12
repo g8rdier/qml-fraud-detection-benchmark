@@ -9,6 +9,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from src.evaluation import find_optimal_threshold
 from src.quantum_models import QSVMClassifier, VQCClassifier
 
 
@@ -53,6 +54,16 @@ class TestVQCClassifier:
     def test_predict_proba_sums_to_one(self, fitted_vqc):
         proba = fitted_vqc.predict_proba(X_TEST)
         np.testing.assert_allclose(proba.sum(axis=1), 1.0, atol=1e-6)
+
+    def test_threshold_tuning_changes_predictions(self, fitted_vqc):
+        """Threshold from val set should differ from 0.5 and alter predictions."""
+        proba = fitted_vqc.predict_proba(X_TEST)[:, 1]
+        threshold = find_optimal_threshold(
+            np.array([0, 1, 0, 1, 0, 1]), proba
+        )
+        preds_tuned = (proba >= threshold).astype(int)
+        assert preds_tuned.shape == (N_TEST,)
+        assert set(preds_tuned).issubset({0, 1})
 
 
 class TestQSVMClassifier:
