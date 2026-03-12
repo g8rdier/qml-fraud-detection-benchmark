@@ -11,8 +11,11 @@ build/
 data/raw/
 data/processed/
 
-# Results (regenerate from code)
-results/
+# Results — commit PNGs, ignore everything else
+results/metrics/
+results/models/
+results/*.log
+results/ablation/*.json
 
 # Jupyter
 .ipynb_checkpoints/
