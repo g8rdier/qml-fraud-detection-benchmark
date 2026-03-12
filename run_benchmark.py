@@ -177,6 +177,7 @@ def _run_quantum(
 ) -> None:
     """Fit VQC and QSVM, collect metrics."""
     # Lazy import — avoids penalising --classical-only runs with PennyLane overhead
+    from src.evaluation import find_optimal_threshold
     from src.quantum_models import QSVMClassifier, VQCClassifier
 
     quantum_models = {
@@ -245,18 +246,41 @@ def _run_quantum(
         fit_time = time.perf_counter() - t0
         logging.info("Fit completed in %.2f s", fit_time)
 
-        y_pred = clf.predict(X_te)
-        y_prob = clf.predict_proba(X_te)
+        # ── Threshold tuning ────────────────────────────────────────────────
+        # VQC: tune on the full pre-SMOTE val set (real 0.17% fraud rate).
+        #   Subsampling val legit destroys calibration — threshold tuned on an
+        #   artificially balanced set is far too aggressive at real fraud rates.
+        #   Cost: ~7 min of predict_proba calls, acceptable after 12 min of training.
+        #
+        # QSVM: skip threshold tuning. class_weight="balanced" in the SVC already
+        #   corrects for class imbalance, and tuning on a subsampled val set hurt
+        #   performance (0.849 tuned vs 0.857 untuned in testing).
+        if name == "VQC":
+            logging.info(
+                "VQC threshold tuning on full val set (%d samples, real distribution)…",
+                len(data.y_val),
+            )
+            val_prob = clf.predict_proba(data.X_val)[:, 1]
+            threshold = find_optimal_threshold(data.y_val, val_prob)
+            logging.info("VQC tuned threshold: %.4f (was 0.5000)", threshold)
+            y_prob = clf.predict_proba(X_te)
+            y_pred = (y_prob[:, 1] >= threshold).astype(int)
+            label  = f"{name} (tuned τ={threshold:.3f})"
+        else:
+            # QSVM — rely on class_weight="balanced" for calibration
+            y_prob = clf.predict_proba(X_te)
+            y_pred = clf.predict(X_te)
+            label  = name
 
         metrics = evaluate_model(
-            model_name=name,
+            model_name=label,
             y_true=y_te,
             y_pred=y_pred,
             y_prob=y_prob,
         )
         results.append(metrics)
         plot_data.append({
-            "name":   name,
+            "name":   label,
             "y_true": y_te,
             "y_pred": y_pred,
             "y_prob": y_prob[:, 1],
