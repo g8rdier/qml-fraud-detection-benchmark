@@ -16,6 +16,7 @@ results/metrics/
 results/models/
 results/*.log
 results/ablation/*.json
+results/latency/*.json
 
 # Jupyter
 .ipynb_checkpoints/
