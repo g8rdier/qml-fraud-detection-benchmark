@@ -89,6 +89,7 @@ class VQCClassifier(BaseEstimator, ClassifierMixin):
         learning_rate: float = 0.01,
         backend: str = "lightning.qubit",
         random_state: int = 42,
+        noise_level: float = 0.0,
     ) -> None:
         self.n_qubits = n_qubits
         self.n_layers = n_layers
@@ -96,21 +97,34 @@ class VQCClassifier(BaseEstimator, ClassifierMixin):
         self.learning_rate = learning_rate
         self.backend = backend
         self.random_state = random_state
+        self.noise_level = noise_level
 
     # ------------------------------------------------------------------
     # Circuit definition
     # ------------------------------------------------------------------
 
     def _build_device(self) -> qml.Device:
-        return qml.device(self.backend, wires=self.n_qubits)
+        # Noise channels require density-matrix simulation (default.mixed).
+        # lightning.qubit only supports pure-state simulation.
+        backend = "default.mixed" if self.noise_level > 0 else self.backend
+        return qml.device(backend, wires=self.n_qubits)
 
     def _make_circuit(self, dev: qml.Device):
+        noise_level = self.noise_level
+        n_qubits    = self.n_qubits
+
         @qml.qnode(dev, interface="autograd")
         def circuit(inputs: pnp.ndarray, weights: pnp.ndarray) -> float:
             # Encode classical data into rotation angles
-            qml.AngleEmbedding(inputs, wires=range(self.n_qubits), rotation="Y")
+            qml.AngleEmbedding(inputs, wires=range(n_qubits), rotation="Y")
+            if noise_level > 0:
+                for w in range(n_qubits):
+                    qml.DepolarizingChannel(noise_level, wires=w)
             # Variational ansatz
-            qml.StronglyEntanglingLayers(weights, wires=range(self.n_qubits))
+            qml.StronglyEntanglingLayers(weights, wires=range(n_qubits))
+            if noise_level > 0:
+                for w in range(n_qubits):
+                    qml.DepolarizingChannel(noise_level, wires=w)
             # Expectation value as scalar output ∈ [-1, 1]
             return qml.expval(qml.PauliZ(0))
 
@@ -203,32 +217,44 @@ class QSVMClassifier(BaseEstimator, ClassifierMixin):
         n_qubits: int = 8,
         backend: str = "lightning.qubit",
         svm_C: float = 1.0,
+        noise_level: float = 0.0,
     ) -> None:
         self.n_qubits = n_qubits
         self.backend = backend
         self.svm_C = svm_C
+        self.noise_level = noise_level
 
     def _kernel_circuit(self, dev: qml.Device):
+        noise_level = self.noise_level
+        n_qubits    = self.n_qubits
+
         @qml.qnode(dev, interface="autograd")
         def _kernel(x1: pnp.ndarray, x2: pnp.ndarray) -> float:
             # Encode x1
-            qml.AngleEmbedding(x1, wires=range(self.n_qubits), rotation="Z")
-            qml.AngleEmbedding(x1, wires=range(self.n_qubits), rotation="Y")
+            qml.AngleEmbedding(x1, wires=range(n_qubits), rotation="Z")
+            qml.AngleEmbedding(x1, wires=range(n_qubits), rotation="Y")
+            if noise_level > 0:
+                for w in range(n_qubits):
+                    qml.DepolarizingChannel(noise_level, wires=w)
             # Adjoint of x2 encoding
             qml.adjoint(qml.AngleEmbedding)(
-                x2, wires=range(self.n_qubits), rotation="Y"
+                x2, wires=range(n_qubits), rotation="Y"
             )
             qml.adjoint(qml.AngleEmbedding)(
-                x2, wires=range(self.n_qubits), rotation="Z"
+                x2, wires=range(n_qubits), rotation="Z"
             )
-            return qml.probs(wires=range(self.n_qubits))
+            if noise_level > 0:
+                for w in range(n_qubits):
+                    qml.DepolarizingChannel(noise_level, wires=w)
+            return qml.probs(wires=range(n_qubits))
 
         return _kernel
 
     def _compute_kernel_matrix(
         self, X1: np.ndarray, X2: np.ndarray
     ) -> np.ndarray:
-        dev = qml.device(self.backend, wires=self.n_qubits)
+        backend = "default.mixed" if self.noise_level > 0 else self.backend
+        dev = qml.device(backend, wires=self.n_qubits)
         kernel_fn = self._kernel_circuit(dev)
 
         K = np.zeros((len(X1), len(X2)))
