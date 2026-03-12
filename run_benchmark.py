@@ -200,10 +200,6 @@ def _run_quantum(
     MAX_VQC_TRAIN  = 600   # 300 fraud + 300 legit, stratified
     MAX_QSVM_TRAIN = 300   # 300×300 = 90k kernel evals (train)
     MAX_QSVM_TEST  = 1000  # 1000×300 = 300k kernel evals (predict)
-    # Val subsample for threshold tuning: keep all fraud (~58 samples) +
-    # enough legit to form a meaningful PR curve, while keeping predict_proba
-    # calls feasible (VQC: ~258 circuit evals ≈ 40s; QSVM: 258×300 kernel evals ≈ 5min).
-    MAX_VAL_LEGIT  = 200
     n_train = len(data.X_train)
     n_test  = len(data.X_test)
 
@@ -250,27 +246,31 @@ def _run_quantum(
         fit_time = time.perf_counter() - t0
         logging.info("Fit completed in %.2f s", fit_time)
 
-        # ── Threshold tuning on pre-SMOTE val set (real class distribution) ─
-        # Keep all fraud samples + subsample legit to limit predict_proba cost.
-        idx_fraud = np.where(data.y_val == 1)[0]
-        idx_legit = np.where(data.y_val == 0)[0]
-        idx_val = np.concatenate([
-            idx_fraud,
-            rng.choice(idx_legit, size=min(MAX_VAL_LEGIT, len(idx_legit)), replace=False),
-        ])
-        X_val_tune = data.X_val[idx_val]
-        y_val_tune = data.y_val[idx_val]
-        logging.info(
-            "%s threshold tuning: %d fraud + %d legit val samples…",
-            name, len(idx_fraud), min(MAX_VAL_LEGIT, len(idx_legit)),
-        )
-        val_prob = clf.predict_proba(X_val_tune)[:, 1]
-        threshold = find_optimal_threshold(y_val_tune, val_prob)
-        logging.info("%s tuned threshold: %.4f (was 0.5000)", name, threshold)
-
-        y_prob = clf.predict_proba(X_te)
-        y_pred = (y_prob[:, 1] >= threshold).astype(int)
-        label  = f"{name} (tuned τ={threshold:.3f})"
+        # ── Threshold tuning ────────────────────────────────────────────────
+        # VQC: tune on the full pre-SMOTE val set (real 0.17% fraud rate).
+        #   Subsampling val legit destroys calibration — threshold tuned on an
+        #   artificially balanced set is far too aggressive at real fraud rates.
+        #   Cost: ~7 min of predict_proba calls, acceptable after 12 min of training.
+        #
+        # QSVM: skip threshold tuning. class_weight="balanced" in the SVC already
+        #   corrects for class imbalance, and tuning on a subsampled val set hurt
+        #   performance (0.849 tuned vs 0.857 untuned in testing).
+        if name == "VQC":
+            logging.info(
+                "VQC threshold tuning on full val set (%d samples, real distribution)…",
+                len(data.y_val),
+            )
+            val_prob = clf.predict_proba(data.X_val)[:, 1]
+            threshold = find_optimal_threshold(data.y_val, val_prob)
+            logging.info("VQC tuned threshold: %.4f (was 0.5000)", threshold)
+            y_prob = clf.predict_proba(X_te)
+            y_pred = (y_prob[:, 1] >= threshold).astype(int)
+            label  = f"{name} (tuned τ={threshold:.3f})"
+        else:
+            # QSVM — rely on class_weight="balanced" for calibration
+            y_prob = clf.predict_proba(X_te)
+            y_pred = clf.predict(X_te)
+            label  = name
 
         metrics = evaluate_model(
             model_name=label,

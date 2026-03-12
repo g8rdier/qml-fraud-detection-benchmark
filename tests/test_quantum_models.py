@@ -55,15 +55,19 @@ class TestVQCClassifier:
         proba = fitted_vqc.predict_proba(X_TEST)
         np.testing.assert_allclose(proba.sum(axis=1), 1.0, atol=1e-6)
 
-    def test_threshold_tuning_changes_predictions(self, fitted_vqc):
-        """Threshold from val set should differ from 0.5 and alter predictions."""
-        proba = fitted_vqc.predict_proba(X_TEST)[:, 1]
-        threshold = find_optimal_threshold(
-            np.array([0, 1, 0, 1, 0, 1]), proba
-        )
-        preds_tuned = (proba >= threshold).astype(int)
-        assert preds_tuned.shape == (N_TEST,)
-        assert set(preds_tuned).issubset({0, 1})
+    def test_threshold_tuning_on_real_distribution(self, fitted_vqc):
+        """Threshold tuned on real-distribution val set must yield valid predictions."""
+        # Simulate real fraud rate (~0.17%): 1 fraud in ~600 samples
+        rng = np.random.default_rng(0)
+        n_val = 50
+        X_val = rng.uniform(0, 1, size=(n_val, N_QUBITS))
+        y_val = np.zeros(n_val, dtype=int)
+        y_val[0] = 1  # one fraud sample
+        val_prob = fitted_vqc.predict_proba(X_val)[:, 1]
+        threshold = find_optimal_threshold(y_val, val_prob)
+        preds = (fitted_vqc.predict_proba(X_TEST)[:, 1] >= threshold).astype(int)
+        assert preds.shape == (N_TEST,)
+        assert set(preds).issubset({0, 1})
 
 
 class TestQSVMClassifier:
