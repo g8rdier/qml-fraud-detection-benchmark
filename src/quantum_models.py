@@ -41,10 +41,14 @@ logger = logging.getLogger(__name__)
 # Helpers
 # ---------------------------------------------------------------------------
 
+def _fit_normaliser(X: np.ndarray) -> MinMaxScaler:
+    """Fit a [0, π] MinMaxScaler on X and return it (without transforming)."""
+    return MinMaxScaler(feature_range=(0, np.pi)).fit(X)
+
+
 def _normalise_to_pi(X: np.ndarray) -> np.ndarray:
-    """Scale each feature column to the range [0, π]."""
-    scaler = MinMaxScaler(feature_range=(0, np.pi))
-    return scaler.fit_transform(X)
+    """Fit-transform X to [0, π].  Only used internally during fit()."""
+    return _fit_normaliser(X).transform(X)
 
 
 # ---------------------------------------------------------------------------
@@ -118,17 +122,21 @@ class VQCClassifier(BaseEstimator, ClassifierMixin):
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> "VQCClassifier":
         rng = np.random.default_rng(self.random_state)
-        X = _normalise_to_pi(X)
+        self.normaliser_ = _fit_normaliser(X)
+        X = self.normaliser_.transform(X)
 
         dev = self._build_device()
         circuit = self._make_circuit(dev)
 
-        # Initialise weights: shape (n_layers, n_qubits, 3) for SEL
+        # Initialise weights: shape (n_layers, n_qubits, 3) for SEL.
+        # Small angles near 0 (σ=0.1 rad) avoid the barren-plateau regime that
+        # arises when weights are uniformly spread over [0, 2π] — gradients
+        # vanish exponentially with circuit depth in that case.
         weight_shape = qml.StronglyEntanglingLayers.shape(
             n_layers=self.n_layers, n_wires=self.n_qubits
         )
         weights = pnp.array(
-            rng.uniform(0, 2 * np.pi, size=weight_shape), requires_grad=True
+            rng.normal(0, 0.1, size=weight_shape), requires_grad=True
         )
 
         opt = qml.AdamOptimizer(stepsize=self.learning_rate)
@@ -155,7 +163,7 @@ class VQCClassifier(BaseEstimator, ClassifierMixin):
         return self
 
     def predict_proba(self, X: np.ndarray) -> np.ndarray:
-        X = _normalise_to_pi(X)
+        X = self.normaliser_.transform(X)
         raw = np.array([
             float(self.circuit_(pnp.array(x), self.weights_)) for x in X
         ])
@@ -170,6 +178,7 @@ class VQCClassifier(BaseEstimator, ClassifierMixin):
 # ---------------------------------------------------------------------------
 # Quantum Support Vector Machine (QSVM)
 # ---------------------------------------------------------------------------
+
 
 class QSVMClassifier(BaseEstimator, ClassifierMixin):
     """
@@ -231,7 +240,8 @@ class QSVMClassifier(BaseEstimator, ClassifierMixin):
         return K
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> "QSVMClassifier":
-        self.X_train_ = _normalise_to_pi(X)
+        self.normaliser_ = _fit_normaliser(X)
+        self.X_train_ = self.normaliser_.transform(X)
         self.classes_ = np.array([0, 1])
 
         logger.info("QSVM: computing %dx%d kernel matrix (train)…",
@@ -239,17 +249,18 @@ class QSVMClassifier(BaseEstimator, ClassifierMixin):
         K_train = self._compute_kernel_matrix(self.X_train_, self.X_train_)
 
         self.svc_ = SVC(
-            kernel="precomputed", C=self.svm_C, probability=True
+            kernel="precomputed", C=self.svm_C, probability=True,
+            class_weight="balanced",  # corrects for real fraud rate after subsampling
         )
         self.svc_.fit(K_train, y)
         return self
 
     def predict_proba(self, X: np.ndarray) -> np.ndarray:
-        X_scaled = _normalise_to_pi(X)
+        X_scaled = self.normaliser_.transform(X)
         K_test = self._compute_kernel_matrix(X_scaled, self.X_train_)
         return self.svc_.predict_proba(K_test)
 
     def predict(self, X: np.ndarray) -> np.ndarray:
-        X_scaled = _normalise_to_pi(X)
+        X_scaled = self.normaliser_.transform(X)
         K_test = self._compute_kernel_matrix(X_scaled, self.X_train_)
         return self.svc_.predict(K_test)

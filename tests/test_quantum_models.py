@@ -36,6 +36,7 @@ class TestVQCClassifier:
 
     def test_fit_sets_weights(self, fitted_vqc):
         assert hasattr(fitted_vqc, "weights_")
+        assert hasattr(fitted_vqc, "normaliser_")
 
     def test_predict_shape(self, fitted_vqc):
         preds = fitted_vqc.predict(X_TEST)

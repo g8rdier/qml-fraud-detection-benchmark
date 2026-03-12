@@ -150,7 +150,7 @@ def train_classical_model(
                 "recall":    "recall",
             },
             return_train_score=False,
-            n_jobs=-1,
+            n_jobs=1,   # avoid joblib/loky resource-tracker spam on Python 3.13
         )
         cv_scores = {k.replace("test_", ""): v for k, v in raw.items()
                      if k.startswith("test_")}
