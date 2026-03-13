@@ -135,10 +135,38 @@ Add `--vqc-only` to skip QSVM if you want faster results first.
 
 ---
 
+## Git workflow (important)
+
+Follow https://github.com/g8rdier/dev-best-practices strictly:
+- Feature branches: `type/short-description`
+- Conventional commits: `feat:`, `fix:`, `chore:`, etc.
+- Squash merge only: `gh pr merge <N> --squash --delete-branch --subject "feat: Title (#N)"`
+- **No Co-Authored-By lines** in commits
+- Commit author: `gregor.kobilarov@gmail.com`
+
+**Configure git author on Mac Mini before committing:**
+```bash
+git config user.email "gregor.kobilarov@gmail.com"
+git config user.name "g8rdier"
+```
+
+**Results go to the existing `feat/noise-model` branch:**
+```bash
+git checkout feat/noise-model
+# copy/move results files then:
+git add results/noise/noise_vs_metric.png
+git commit -m "feat: Add noise sweep results and figure"
+git push
+```
+
+**Next merge number is #7** (main currently has 6 squash merges).
+
+---
+
 ## After the sweep — what's left for the full project
 
-1. Copy `results/noise/noise_results.json` + `results/noise/noise_vs_metric.png`
-   back to the Fedora machine (or commit directly from Mac Mini to `feat/noise-model` branch)
-2. Push `feat/noise-model` → open PR → squash merge as next merge number
+1. Commit `results/noise/noise_vs_metric.png` to `feat/noise-model` branch
+   (note: `noise_results.json` is gitignored — only the PNG is committed)
+2. Push → open PR → squash merge as **#7**: `feat: Add depolarizing noise sweep (#7)`
 3. Final piece: `feat/report-notebook` — Jupyter notebook telling the full story
-4. dev-best-practices repo has issues #21–#26 still open (separate repo: github.com/g8rdier/dev-best-practices)
+4. dev-best-practices repo (github.com/g8rdier/dev-best-practices) has issues #21–#26 open
