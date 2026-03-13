@@ -1,48 +1,93 @@
 # Mac Mini M4 Handoff — QML Noise Sweep
 
-## Context
+## Why this file exists
 
 The depolarizing noise sweep (`run_noise.py`) was killed mid-run on the Fedora laptop
-(charging failure, ~16h into the run). Pick it up fresh on the M4 Mac Mini.
-
-**Progress made before kill:**
-- p=0.0  → VQC F1-fraud=0.699, QSVM F1-fraud=0.905 ✓
-- p=0.001 → VQC F1-fraud=0.655, MCC=0.569 ✓
-- p=0.001 → QSVM kernel matrix was computing when killed (no result saved)
-
-The JSON output (`results/noise/noise_results.json`) was **not written** — it only
-writes at the end of the full sweep. Start from scratch.
+due to a charging failure (~16h into the run). Continuing on M4 Mac Mini.
 
 ---
 
-## Setup
+## Project context (for Claude on Mac Mini)
+
+This is a benchmark comparing quantum ML models (VQC, QSVM via PennyLane) against
+classical baselines (XGBoost, Random Forest) on the Kaggle Credit Card Fraud dataset.
+
+**Architecture:**
+- `src/preprocessing.py` — RobustScaler → SMOTE → PCA (to n_qubits)
+- `src/quantum_models.py` — VQCClassifier (StronglyEntanglingLayers) + QSVMClassifier (quantum kernel)
+- `src/classical_models.py` — build_random_forest(), build_xgboost()
+- `src/evaluation.py` — ModelMetrics, evaluate_model(), compare_models()
+- `run_benchmark.py` — main benchmark entry point
+- `run_noise.py` — depolarizing noise sweep (the task at hand)
+- `run_latency.py` — per-sample inference timing
+- `tests/` — 33 tests, all passing
+
+**Key decisions:**
+- RobustScaler (not StandardScaler) — financial data has extreme outliers
+- SMOTE applied after train/test split on training set only (leakage prevention)
+- PCA fitted on train only; n_components == n_qubits
+- `lightning.qubit` backend for speed; `default.mixed` auto-selected when noise_level > 0
+- Primary metrics: F1-fraud, PR-AUC, ROC-AUC, MCC
+
+**Known bugs (already fixed in codebase):**
+- Normalizer leakage: `_normalise_to_pi()` was re-fitting on predict — fixed, uses saved `self.normaliser_`
+- QSVM class imbalance: `class_weight="balanced"` added to SVC
+- VQC weight init: `normal(0, 0.1)` instead of `uniform(0, 2π)` to avoid barren plateaus
+
+**Previous results (smoke test, 4 qubits, 30 epochs):**
+- RF: F1-fraud=0.758, MCC=0.762
+- XGBoost: F1-fraud=0.852, MCC=0.854
+- QSVM (after fix): F1-fraud=0.884, MCC=0.867
+- VQC: still needs more epochs to escape barren plateau
+
+**Noise sweep progress before kill:**
+- p=0.0   → VQC F1-fraud=0.699, QSVM F1-fraud=0.905 ✓
+- p=0.001 → VQC F1-fraud=0.655, MCC=0.569, took ~4.9h on default.mixed ✓
+- p=0.001 → QSVM kernel matrix was mid-compute when killed (no JSON saved)
+
+Start the sweep from scratch — JSON only writes at end of full run.
+
+---
+
+## Setup on Mac Mini
+
+**Python version: must be 3.12** (pyproject.toml requires `>=3.12,<3.13`)
 
 ```bash
-# 1. Clone the repo
-git clone https://github.com/YOUR_USERNAME/qml-fraud-detection-benchmark.git
+# Install Python 3.12 if needed (via brew)
+brew install python@3.12
+
+# Clone repo
+git clone https://github.com/g8rdier/qml-fraud-detection-benchmark.git
 cd qml-fraud-detection-benchmark
 
-# 2. Create venv (Python 3.13 preferred, 3.11+ works)
-python3 -m venv .venv
+# Create venv with Python 3.12
+python3.12 -m venv .venv
 source .venv/bin/activate
 
-# 3. Install dependencies
-pip install -e ".[dev]"
-# or if pyproject.toml doesn't cover everything:
-pip install pennylane pennylane-lightning scikit-learn xgboost imbalanced-learn \
-            numpy pandas matplotlib joblib
+# Install dependencies manually (pyproject.toml deps are pixi-only, not pip)
+pip install numpy pandas scipy scikit-learn xgboost imbalanced-learn \
+            pennylane pennylane-lightning matplotlib seaborn \
+            joblib tqdm pyyaml jupyter ipykernel pytest pytest-cov
 
-# 4. Get the dataset
-# Download creditcard.csv from Kaggle:
-# https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud
-# Place at: data/raw/creditcard.csv
+# Install package in editable mode
+pip install -e . --no-deps
+```
+
+**Dataset:**
+Download `creditcard.csv` from https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud
+Place at: `data/raw/creditcard.csv` (284807 rows, 0.1727% fraud)
+
+**Verify setup:**
+```bash
+pytest tests/ -v --ignore=tests/test_noise.py -x
 ```
 
 ---
 
 ## What to run
 
-### Step 1 — Classical baselines (needed by noise sweep)
+### Step 1 — Classical baselines (required by noise sweep)
 
 ```bash
 python run_benchmark.py \
@@ -52,11 +97,12 @@ python run_benchmark.py \
   --no-plots
 ```
 
-This saves `results/models/random_forest.joblib` and `results/models/xgboost.joblib`.
+Saves `results/models/random_forest.joblib` and `results/models/xgboost.joblib`.
 
 ### Step 2 — Noise sweep
 
 ```bash
+mkdir -p results/noise
 python run_noise.py \
   --data-path data/raw/creditcard.csv \
   --n-qubits 8 \
@@ -67,26 +113,20 @@ tail -f results/noise_run.log
 
 Default noise levels: `[0.0, 0.001, 0.005, 0.01, 0.02, 0.05]`
 
-**Expected runtime on M4:** VQC at p=0 (ideal, lightning.qubit) ~fast.
-Noisy levels (default.mixed, density matrix) will be slower but M4 handles it well.
+Add `--vqc-only` to skip QSVM if you want faster results first.
 
-### Step 3 — After sweep completes
-
-Outputs:
+**Expected outputs:**
 - `results/noise/noise_results.json`
 - `results/noise/noise_vs_metric.png`
 
-Copy the PNG back (or commit it) — it goes into `feat/noise-model` branch on the
-Fedora machine (or wherever the main dev continues).
-
 ---
 
-## Key settings
+## Key settings (inside run_noise.py)
 
 | Parameter | Value |
 |---|---|
 | n_qubits | 8 |
-| VQC epochs | 30 (noise sweep uses reduced settings) |
+| VQC epochs | 30 |
 | VQC train samples | 200 |
 | QSVM train samples | 100 |
 | Max test samples | 500 |
@@ -95,8 +135,10 @@ Fedora machine (or wherever the main dev continues).
 
 ---
 
-## After the noise sweep — what's left
+## After the sweep — what's left for the full project
 
-1. Commit `noise_results.json` + `noise_vs_metric.png` → push to `feat/noise-model` → PR → squash merge
-2. `feat/report-notebook` — Jupyter notebook telling the full story (final deliverable)
-3. dev-best-practices issues #21–#26 still open
+1. Copy `results/noise/noise_results.json` + `results/noise/noise_vs_metric.png`
+   back to the Fedora machine (or commit directly from Mac Mini to `feat/noise-model` branch)
+2. Push `feat/noise-model` → open PR → squash merge as next merge number
+3. Final piece: `feat/report-notebook` — Jupyter notebook telling the full story
+4. dev-best-practices repo has issues #21–#26 still open (separate repo: github.com/g8rdier/dev-best-practices)
