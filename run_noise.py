@@ -46,6 +46,7 @@ from src.preprocessing import PreprocessingConfig, preprocess
 NOISE_DIR  = Path("results/noise")
 MODELS_DIR = Path("results/models")
 DATA_PATH  = Path("data/raw/creditcard.csv")
+MERGE_DIR  = Path("results/noise")
 
 DEFAULT_NOISE_LEVELS = [0.0, 0.001, 0.005, 0.01, 0.02, 0.05]
 
@@ -61,20 +62,39 @@ MAX_TEST_SAMPLES   = 500
 # ---------------------------------------------------------------------------
 
 def _parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(
+    parser = argparse.ArgumentParser(
         description="Depolarizing noise sweep for quantum models",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
+    sub = parser.add_subparsers(dest="command")
+
+    # ── merge subcommand ──────────────────────────────────────────────────────
+    m = sub.add_parser("merge", help="Merge per-level JSONs into one and plot.")
+    m.add_argument("--noise-dirs", type=Path, nargs="+", required=True,
+                   help="Directories containing noise_results.json files to merge.")
+    m.add_argument("--out-dir",    type=Path, default=MERGE_DIR)
+    m.add_argument("--no-plots",   action="store_true")
+
+    # ── sweep subcommand (default) ────────────────────────────────────────────
+    p = sub.add_parser("sweep", help="Run noise sweep (default).")
     p.add_argument("--data-path",    type=Path,  default=DATA_PATH)
     p.add_argument("--n-qubits",     type=int,   default=8)
     p.add_argument(
         "--noise-levels", type=float, nargs="+", default=DEFAULT_NOISE_LEVELS,
         help="Depolarizing error probabilities to sweep.",
     )
-    p.add_argument("--vqc-only",  action="store_true", help="Skip QSVM (faster).")
-    p.add_argument("--no-plots",  action="store_true")
-    p.add_argument("--log-level", choices=["DEBUG", "INFO", "WARNING"], default="INFO")
-    return p.parse_args()
+    p.add_argument("--noise-dir",  type=Path, default=NOISE_DIR,
+                   help="Output directory for this run's results.")
+    p.add_argument("--vqc-only",   action="store_true", help="Skip QSVM (faster).")
+    p.add_argument("--no-plots",   action="store_true")
+    p.add_argument("--log-level",  choices=["DEBUG", "INFO", "WARNING"], default="INFO")
+
+    args = parser.parse_args()
+    # default to sweep when no subcommand given (backwards compatible)
+    if args.command is None:
+        args = p.parse_args()
+        args.command = "sweep"
+    return args
 
 
 # ---------------------------------------------------------------------------
@@ -232,11 +252,53 @@ def _plot_noise_sweep(
 
 
 # ---------------------------------------------------------------------------
+# Merge
+# ---------------------------------------------------------------------------
+
+def _merge(args) -> None:
+    logging.basicConfig(level=logging.INFO,
+                        format="%(asctime)s | %(levelname)-8s | %(message)s",
+                        datefmt="%H:%M:%S")
+    all_results: list[dict] = []
+    for d in args.noise_dirs:
+        f = d / "noise_results.json"
+        if not f.exists():
+            logging.warning("Not found, skipping: %s", f)
+            continue
+        with open(f) as fh:
+            all_results.extend(json.load(fh))
+        logging.info("Loaded %s", f)
+
+    # Deduplicate by (model, noise_level), keep last seen
+    seen: dict[tuple, dict] = {}
+    for r in all_results:
+        seen[(r["model"], r["noise_level"])] = r
+    merged = list(seen.values())
+
+    args.out_dir.mkdir(parents=True, exist_ok=True)
+    out_json = args.out_dir / "noise_results.json"
+    with open(out_json, "w") as fh:
+        json.dump(merged, fh, indent=2)
+    logging.info("Merged %d records → %s", len(merged), out_json)
+
+    if not args.no_plots:
+        classical = [r for r in merged if r["noise_level"] is None]
+        quantum   = [r for r in merged if r["noise_level"] is not None]
+        levels    = sorted(set(r["noise_level"] for r in quantum))
+        _plot_noise_sweep(levels, quantum, classical, args.out_dir / "noise_vs_metric.png")
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
 def main() -> None:
     args = _parse_args()
+
+    if args.command == "merge":
+        _merge(args)
+        return
+
     logging.basicConfig(
         level=getattr(logging, args.log_level),
         format="%(asctime)s | %(levelname)-8s | %(message)s",
@@ -298,9 +360,9 @@ def main() -> None:
                  (time.perf_counter() - t_total) / 60)
 
     # ── Save JSON ─────────────────────────────────────────────────────────────
-    NOISE_DIR.mkdir(parents=True, exist_ok=True)
+    args.noise_dir.mkdir(parents=True, exist_ok=True)
     all_results = classical_results + quantum_results
-    out_json = NOISE_DIR / "noise_results.json"
+    out_json = args.noise_dir / "noise_results.json"
     with open(out_json, "w") as fh:
         json.dump(all_results, fh, indent=2)
     logging.info("Results saved to %s", out_json)
@@ -329,10 +391,10 @@ def main() -> None:
     if not args.no_plots:
         _plot_noise_sweep(
             args.noise_levels, quantum_results, classical_results,
-            NOISE_DIR / "noise_vs_metric.png",
+            args.noise_dir / "noise_vs_metric.png",
         )
 
-    print(f"Noise sweep complete. Results saved to {NOISE_DIR}/")
+    print(f"Noise sweep complete. Results saved to {args.noise_dir}/")
 
 
 if __name__ == "__main__":
