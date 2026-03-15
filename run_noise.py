@@ -85,7 +85,8 @@ def _parse_args() -> argparse.Namespace:
     )
     p.add_argument("--noise-dir",  type=Path, default=NOISE_DIR,
                    help="Output directory for this run's results.")
-    p.add_argument("--vqc-only",   action="store_true", help="Skip QSVM (faster).")
+    p.add_argument("--vqc-only",   action="store_true", help="Skip QSVM, run VQC only.")
+    p.add_argument("--qsvm-only",  action="store_true", help="Skip VQC, run QSVM only.")
     p.add_argument("--no-plots",   action="store_true")
     p.add_argument("--log-level",  choices=["DEBUG", "INFO", "WARNING"], default="INFO")
 
@@ -332,17 +333,18 @@ def main() -> None:
     for p in args.noise_levels:
         logging.info("\n%s\n  noise_level = %.4f\n%s", "=" * 50, p, "=" * 50)
 
-        t0 = time.perf_counter()
-        res = _run_vqc(
-            data.X_train, data.y_train,
-            data.X_val,   data.y_val,
-            data.X_test,  data.y_test,
-            args.n_qubits, p, rng,
-        )
-        quantum_results.append(res)
-        logging.info("VQC  p=%.4f | F1-fraud=%.4f MCC=%.4f | %.1f s",
-                     p, res["metrics"]["f1_fraud"], res["metrics"]["mcc"],
-                     time.perf_counter() - t0)
+        if not args.qsvm_only:
+            t0 = time.perf_counter()
+            res = _run_vqc(
+                data.X_train, data.y_train,
+                data.X_val,   data.y_val,
+                data.X_test,  data.y_test,
+                args.n_qubits, p, rng,
+            )
+            quantum_results.append(res)
+            logging.info("VQC  p=%.4f | F1-fraud=%.4f MCC=%.4f | %.1f s",
+                         p, res["metrics"]["f1_fraud"], res["metrics"]["mcc"],
+                         time.perf_counter() - t0)
 
         if not args.vqc_only:
             t0 = time.perf_counter()
