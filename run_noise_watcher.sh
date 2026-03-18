@@ -1,49 +1,66 @@
 #!/usr/bin/env bash
 # run_noise_watcher.sh
-# Monitors running noise sweep processes. As soon as any slot frees up,
-# launches the next queued job (VQC-only first, then QSVM-only per level).
-# Auto-merges and plots when everything is done.
+# Universal noise sweep watcher.
 #
-# Queue order for remaining levels:
-#   p=0.02 VQC → p=0.05 VQC → p=0.02 QSVM → p=0.05 QSVM
-# VQC jobs go first so QSVM can start as early as possible.
+# Can be run from scratch or mid-sweep. Runs noise levels in a granular
+# VQC-first then QSVM queue, with at most MAX_PARALLEL jobs at a time.
+# VQC and QSVM for the same level write to separate subdirs to avoid
+# overwriting each other. Auto-merges and plots when everything is done.
+#
+# Usage:
+#   bash run_noise_watcher.sh                        # full sweep, 2 parallel
+#   bash run_noise_watcher.sh --parallel 3           # 3 parallel jobs
+#   bash run_noise_watcher.sh --levels "0.0 0.001"   # custom levels
 
 set -euo pipefail
 
+# ── Defaults ──────────────────────────────────────────────────────────────────
 BASE_DIR="results/noise"
+DATA_PATH="data/raw/creditcard.csv"
+N_QUBITS=8
+MAX_PARALLEL=2
+NOISE_LEVELS=(0.0 0.001 0.005 0.01 0.02 0.05)
 ENV_VARS="OMP_NUM_THREADS=10 OPENBLAS_NUM_THREADS=10 VECLIB_MAXIMUM_THREADS=10 MKL_NUM_THREADS=10 NUMEXPR_NUM_THREADS=10"
-ALL_LEVELS=(0.0 0.001 0.005 0.01 0.02 0.05)
 
-# Each entry: "noise_level:mode"  mode = vqc | qsvm
-QUEUE=(
-    "0.02:vqc"
-    "0.05:vqc"
-    "0.02:qsvm"
-    "0.05:qsvm"
-)
-QUEUE_IDX=0
+# ── CLI ───────────────────────────────────────────────────────────────────────
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --parallel) MAX_PARALLEL="$2"; shift 2 ;;
+        --levels)   read -ra NOISE_LEVELS <<< "$2"; shift 2 ;;
+        --base-dir) BASE_DIR="$2"; shift 2 ;;
+        *) echo "Unknown arg: $1"; exit 1 ;;
+    esac
+done
 
 log() { echo "[$(date +%H:%M:%S)] $*"; }
 
+# ── Build queue: VQC jobs first, then QSVM ───────────────────────────────────
+# Each entry: "noise_level:phase:outdir"
+QUEUE=()
+for P in "${NOISE_LEVELS[@]}"; do
+    QUEUE+=("${P}:vqc:${BASE_DIR}/p${P}/vqc")
+done
+for P in "${NOISE_LEVELS[@]}"; do
+    QUEUE+=("${P}:qsvm:${BASE_DIR}/p${P}/qsvm")
+done
+QUEUE_IDX=0
+
 launch_next() {
-    if [ $QUEUE_IDX -ge ${#QUEUE[@]} ]; then
-        return
-    fi
+    if [ $QUEUE_IDX -ge ${#QUEUE[@]} ]; then return; fi
 
     local ENTRY="${QUEUE[$QUEUE_IDX]}"
-    local P="${ENTRY%%:*}"
-    local MODE="${ENTRY##*:}"
-    local DIR="$BASE_DIR/p${P}"
+    local P="${ENTRY%%:*}"; local REST="${ENTRY#*:}"
+    local PHASE="${REST%%:*}"; local DIR="${REST#*:}"
     mkdir -p "$DIR"
 
     local FLAG=""
-    [ "$MODE" = "vqc" ]  && FLAG="--vqc-only"
-    [ "$MODE" = "qsvm" ] && FLAG="--qsvm-only"
+    [ "$PHASE" = "vqc" ]  && FLAG="--vqc-only"
+    [ "$PHASE" = "qsvm" ] && FLAG="--qsvm-only"
 
-    log "Launching p=$P ($MODE) → $DIR"
+    log "Launching p=$P ($PHASE) → $DIR"
     env $ENV_VARS pixi run python run_noise.py sweep \
-        --data-path data/raw/creditcard.csv \
-        --n-qubits 8 \
+        --data-path "$DATA_PATH" \
+        --n-qubits "$N_QUBITS" \
         --noise-levels "$P" \
         --noise-dir "$DIR" \
         --no-plots \
@@ -53,29 +70,34 @@ launch_next() {
     QUEUE_IDX=$((QUEUE_IDX + 1))
 }
 
-log "Watcher started (granular VQC/QSVM mode)."
-log "Queue: ${QUEUE[*]}"
-log "Monitoring current processes..."
+log "Watcher started — universal mode."
+log "Levels: ${NOISE_LEVELS[*]} | Max parallel: $MAX_PARALLEL"
+log "Queue: ${#QUEUE[@]} jobs (VQC first, then QSVM)"
+
+# ── Seed initial jobs ─────────────────────────────────────────────────────────
+RUNNING=$(ps aux | grep "run_noise.py sweep" | grep -v grep | wc -l | tr -d ' ')
+while [ "$RUNNING" -lt "$MAX_PARALLEL" ] && [ "$QUEUE_IDX" -lt "${#QUEUE[@]}" ]; do
+    launch_next
+    RUNNING=$((RUNNING + 1))
+done
 
 PREV_COUNT=$(ps aux | grep "run_noise.py sweep" | grep -v grep | wc -l | tr -d ' ')
 
+# ── Main loop ─────────────────────────────────────────────────────────────────
 while true; do
     sleep 120
 
     CURR_COUNT=$(ps aux | grep "run_noise.py sweep" | grep -v grep | wc -l | tr -d ' ')
 
     if [ "$CURR_COUNT" -lt "$PREV_COUNT" ]; then
-        FINISHED=$((PREV_COUNT - CURR_COUNT))
-        log "$FINISHED slot(s) freed. Running: $CURR_COUNT. Launching next..."
-        for ((i=0; i<FINISHED; i++)); do
-            launch_next
-        done
+        FREED=$((PREV_COUNT - CURR_COUNT))
+        log "$FREED slot(s) freed. Running: $CURR_COUNT"
+        for ((i=0; i<FREED; i++)); do launch_next; done
         PREV_COUNT=$(ps aux | grep "run_noise.py sweep" | grep -v grep | wc -l | tr -d ' ')
     else
         PREV_COUNT=$CURR_COUNT
     fi
 
-    # Done when no processes running and queue exhausted
     CURR_COUNT=$(ps aux | grep "run_noise.py sweep" | grep -v grep | wc -l | tr -d ' ')
     if [ "$CURR_COUNT" -eq 0 ] && [ "$QUEUE_IDX" -ge "${#QUEUE[@]}" ]; then
         log "All jobs done. Merging..."
@@ -83,10 +105,11 @@ while true; do
     fi
 done
 
-# Merge + plot
+# ── Merge all results + plot ──────────────────────────────────────────────────
 DIRS=()
-for P in "${ALL_LEVELS[@]}"; do
-    DIRS+=("$BASE_DIR/p${P}")
+for P in "${NOISE_LEVELS[@]}"; do
+    [ -d "$BASE_DIR/p${P}/vqc"  ] && DIRS+=("$BASE_DIR/p${P}/vqc")
+    [ -d "$BASE_DIR/p${P}/qsvm" ] && DIRS+=("$BASE_DIR/p${P}/qsvm")
 done
 
 pixi run python run_noise.py merge \
