@@ -187,6 +187,12 @@ pytest tests/ -v
 
 ---
 
+## Limitations
+
+**Constrained comparison.** Classical models (RF, XGBoost) were trained on the same PCA-reduced feature space as the quantum models — 8 components out of 30 original features. This is necessary for a like-for-like input comparison, but it handicaps classical models that are designed to exploit the full feature set. Unconstrained XGBoost on all 30 features typically achieves F1-fraud of 0.93–0.96 on this dataset, wider than the gap measured here. The benchmark answers the question *"how close can quantum get given NISQ hardware constraints?"* — not *"is quantum better than classical in absolute terms?"*
+
+---
+
 ## Learnings
 
 1. **QSVM is surprisingly noise-tolerant.** Its kernel structure buffers it from depolarizing noise far better than the circuit-based VQC. If a quantum model were to be deployed on NISQ hardware, QSVM is the stronger candidate.
