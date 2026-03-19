@@ -162,6 +162,23 @@ At current best NISQ hardware noise (p ≈ 0.001), QSVM achieves F1-fraud = 0.90
 
 ---
 
+## Qubit Ablation Study
+
+An ablation study systematically varies one component to measure its effect — here, qubit count — while keeping everything else fixed. We swept `n_qubits ∈ [4, 6, 8, 10, 12]` for both VQC and QSVM.
+
+![Qubit ablation results](results/ablation/metric_vs_qubits.png)
+
+**QSVM** is essentially flat across the entire sweep (F1-fraud ~0.85–0.91). More qubits yield no meaningful gain, and performance dips slightly at 10–12 qubits. Two reasons:
+
+- **Concentration of measure.** As the quantum circuit grows, kernel values K(x, x') converge toward the same number — data points become indistinguishable in Hilbert space, degrading the kernel's ability to separate fraud from non-fraud. This is a known fundamental limitation of large quantum kernels.
+- **Diminishing PCA signal.** Each extra qubit adds one more PCA component, but later components capture less and less variance. At 12 qubits the model is partially trained on noise.
+
+**VQC** peaks at 8 qubits then drops sharply at 10–12. The same PCA effect applies, compounded by **barren plateaus** — with deeper circuits the gradient landscape flattens, making training increasingly ineffective.
+
+**Takeaway:** 8 qubits is the sweet spot for this dataset. More qubits add compute cost with no benefit, and can actively hurt performance.
+
+---
+
 ## Running Tests
 
 ```bash
