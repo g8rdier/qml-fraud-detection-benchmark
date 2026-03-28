@@ -1,7 +1,32 @@
 # QML Fraud Detection Benchmark
 
-> **Client:** Leading Financial Service Provider
-> **Objective:** Evaluate the practical utility of Hybrid Quantum-Classical Machine Learning for real-time financial fraud detection in the NISQ era.
+## Academic Context
+
+| | |
+|---|---|
+| **Course** | Industry Project VI, 6th Semester |
+| **Institution** | IU International University of Applied Sciences |
+| **Supervisor** | Wolfgang Zollner |
+| **Student** | Gregor Kobilarov |
+| **Dataset** | [Kaggle Credit Card Fraud Detection](https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud) (n = 284,807) |
+
+---
+
+## Research Question
+
+> "To what extent can Quantum Machine Learning algorithms, given current NISQ constraints, represent a competitive alternative to classical methods for fraud detection?"
+
+---
+
+## Key Hypotheses
+
+**H0₁:** QSVM achieves no statistically significant difference in F1-Fraud score compared to the best classical baseline (XGBoost).
+
+**H1₁:** QSVM achieves a significantly different F1-Fraud score compared to XGBoost.
+
+**H0₂:** Quantum models require equal or less computational time than classical models.
+
+**H1₂:** Quantum models require significantly more computational time due to quantum simulation overhead.
 
 ---
 
@@ -42,6 +67,26 @@ The benchmark is designed around the specific challenges of financial fraud dete
 
 ---
 
+## Dataset Overview
+
+| | |
+|---|---|
+| **Source** | [Kaggle — Credit Card Fraud Detection](https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud) |
+| **Size** | 284,807 transactions |
+| **Features** | 30 (28 PCA-anonymised V1–V28 + Amount + Time) |
+| **Target** | Binary: Fraud (492 cases, 0.17%) / Legitimate (284,315 cases) |
+| **Split** | Train 68% / Val 12% / Test 20% (stratified) |
+
+```bash
+# Option A – Kaggle CLI
+kaggle datasets download -d mlg-ulb/creditcardfraud --path data/raw --unzip
+
+# Option B – Manual
+# Download creditcard.csv from Kaggle and place at data/raw/creditcard.csv
+```
+
+---
+
 ## Project Structure
 
 ```
@@ -68,20 +113,6 @@ qml-fraud-detection-benchmark/
 ├── run_noise_parallel.sh           # Parallel noise sweep launcher
 ├── run_noise_watcher.sh            # Queue-based watcher for long runs
 └── run_plots.py                    # Plot generation from saved results
-```
-
----
-
-## Dataset
-
-The benchmark uses the [Kaggle Credit Card Fraud Detection](https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud) dataset.
-
-```bash
-# Option A – Kaggle CLI
-kaggle datasets download -d mlg-ulb/creditcardfraud --path data/raw --unzip
-
-# Option B – Manual
-# Download creditcard.csv from Kaggle and place at data/raw/creditcard.csv
 ```
 
 ---
@@ -187,6 +218,36 @@ pytest tests/ -v
 
 ---
 
+## Glossary
+
+### Machine Learning Terms
+
+| Term | Definition |
+|---|---|
+| **Classification** | Predicting a category label for each input from labeled training examples |
+| **SVM** | Support Vector Machine — finds the optimal decision boundary maximising the margin between classes |
+| **Kernel** | A function measuring similarity between data points, enabling non-linear decision boundaries |
+| **PCA** | Principal Component Analysis — reduces dimensionality while retaining maximum variance |
+| **SMOTE** | Synthetic Minority Oversampling Technique — generates synthetic fraud examples to counteract class imbalance |
+| **MCC** | Matthews Correlation Coefficient — a single balanced metric for binary classification on imbalanced data (range: −1 to +1) |
+| **PR-AUC** | Area under the Precision-Recall curve — more informative than ROC-AUC for heavily imbalanced datasets |
+| **F1-Fraud** | F1-score computed only for the fraud class — harmonic mean of fraud precision and fraud recall |
+
+### Quantum Computing Terms
+
+| Term | Definition |
+|---|---|
+| **Qubit** | Quantum bit — exists in superposition of 0 and 1 simultaneously until measured |
+| **Quantum Circuit** | A sequence of quantum gates applied to qubits to encode and process information |
+| **AngleEmbedding** | Encodes classical feature values as rotation angles on qubits |
+| **Quantum Kernel** | Measures similarity between two data points as the overlap of their quantum states: K(x, x') = \|⟨φ(x)\|φ(x')⟩\|² |
+| **Depolarizing Noise** | A noise model where each gate randomly applies X, Y, or Z errors with probability p — representative of real NISQ hardware |
+| **NISQ** | Noisy Intermediate-Scale Quantum — current era of quantum hardware: 50–1000 qubits with non-negligible error rates |
+| **Barren Plateau** | Phenomenon where gradients vanish exponentially with circuit depth, making VQC training ineffective at scale |
+| **Density Matrix Simulator** | Simulates quantum noise exactly by tracking the full mixed state — required for noise modelling, but scales as O(4ⁿ) |
+
+---
+
 ## Limitations
 
 **Constrained comparison.** Classical models (RF, XGBoost) were trained on the same PCA-reduced feature space as the quantum models — 8 components out of 30 original features. This is necessary for a like-for-like input comparison, but it handicaps classical models that are designed to exploit the full feature set. Unconstrained XGBoost on all 30 features typically achieves F1-fraud of 0.93–0.96 on this dataset, wider than the gap measured here. The benchmark answers the question *"how close can quantum get given NISQ hardware constraints?"* — not *"is quantum better than classical in absolute terms?"*
@@ -204,3 +265,13 @@ pytest tests/ -v
 4. **SMOTE miscalibrates quantum model thresholds.** Oversampling shifts the decision boundary such that default thresholds (0.5) produce poor precision/recall trade-offs. Post-training threshold tuning on the validation set is essential.
 
 5. **Parallel execution is necessary for noise sweeps.** Each noise level takes 26–37h on an M4 Mac Mini. Running all 6 levels in parallel reduces wall time from ~9 days to ~3.5 days.
+
+---
+
+## Author
+
+Gregor Kobilarov
+
+## License
+
+MIT
