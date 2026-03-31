@@ -258,7 +258,7 @@ def plot_confusion_matrices(
 
         # Create display with appropriate values
         display = ConfusionMatrixDisplay(cm_display, display_labels=["Legit", "Fraud"])
-        display.plot(ax=ax, colorbar=False, cmap='Blues' if not normalize else 'YlOrRd')
+        display.plot(ax=ax, colorbar=False, cmap='RdYlGn_r')
 
         # Add sample size and model name to title
         title = f"{m['name']}\n(n={n_samples:,})"
