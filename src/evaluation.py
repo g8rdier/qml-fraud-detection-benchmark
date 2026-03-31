@@ -22,7 +22,6 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-import seaborn as sns
 from sklearn.metrics import (
     ConfusionMatrixDisplay,
     PrecisionRecallDisplay,
@@ -227,19 +226,54 @@ def plot_roc_curves(
 def plot_confusion_matrices(
     models: list[dict],
     save_path: str | Path | None = None,
+    normalize: bool = False,
 ) -> None:
-    """Plot confusion matrices for all models in a grid."""
+    """
+    Plot confusion matrices for all models in a grid.
+
+    Parameters
+    ----------
+    models : list of dict
+        Each dict: ``{"name": str, "y_true": array, "y_pred": array}``.
+    save_path : path, optional
+        If provided, save figure instead of displaying it.
+    normalize : bool, optional
+        If True, display normalized (percentage) confusion matrices.
+        If False (default), display raw counts.
+    """
     n = len(models)
-    fig, axes = plt.subplots(1, n, figsize=(5 * n, 4))
+    fig, axes = plt.subplots(1, n, figsize=(5.5 * n, 4.5))
     if n == 1:
         axes = [axes]
+
     for ax, m in zip(axes, models):
         cm = confusion_matrix(m["y_true"], m["y_pred"])
-        ConfusionMatrixDisplay(cm, display_labels=["Legit", "Fraud"]).plot(
-            ax=ax, colorbar=False
-        )
-        ax.set_title(m["name"])
-    fig.suptitle("Confusion Matrices", fontsize=14)
+        n_samples = len(m["y_true"])
+
+        # Optionally normalize to percentages
+        if normalize:
+            cm_display = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis] * 100
+        else:
+            cm_display = cm
+
+        # Create display with appropriate values
+        display = ConfusionMatrixDisplay(cm_display, display_labels=["Legit", "Fraud"])
+        display.plot(ax=ax, colorbar=False, cmap='Blues' if not normalize else 'YlOrRd')
+
+        # Add sample size and model name to title
+        title = f"{m['name']}\n(n={n_samples:,})"
+        ax.set_title(title, fontsize=11, fontweight='bold')
+
+        # Adjust text formatting for normalized matrices
+        if normalize:
+            ax.set_xlabel("Predicted label (%)")
+            ax.set_ylabel("True label (%)")
+
+    fig.suptitle(
+        "Confusion Matrices" + (" — Normalized (%)" if normalize else ""),
+        fontsize=14,
+        fontweight='bold'
+    )
     plt.tight_layout()
     _save_or_show(fig, save_path)
 

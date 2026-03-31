@@ -1,0 +1,54 @@
+[
+  {
+    "model": "Random Forest",
+    "noise_level": null,
+    "metrics": {
+      "model_name": "Random Forest",
+      "f1_macro": 0.9440004291154858,
+      "f1_fraud": 0.9171270718232044,
+      "pr_auc": 0.9737487436621888,
+      "roc_auc": 0.9831020408163266,
+      "mcc": 0.8938673530345245,
+      "accuracy": 0.9568965517241379
+    }
+  },
+  {
+    "model": "XGBoost",
+    "noise_level": null,
+    "metrics": {
+      "model_name": "XGBoost",
+      "f1_macro": 0.9482846467391304,
+      "f1_fraud": 0.9239130434782609,
+      "pr_auc": 0.9676759047946261,
+      "roc_auc": 0.9742448979591837,
+      "mcc": 0.9002611819224204,
+      "accuracy": 0.9597701149425287
+    }
+  },
+  {
+    "model": "VQC",
+    "noise_level": 0.005,
+    "metrics": {
+      "model_name": "VQC (p=0.005)",
+      "f1_macro": 0.8022277790406911,
+      "f1_fraud": 0.6987951807228916,
+      "pr_auc": 0.7854974757914095,
+      "roc_auc": 0.8750204081632653,
+      "mcc": 0.6259795958875187,
+      "accuracy": 0.8563218390804598
+    }
+  },
+  {
+    "model": "QSVM",
+    "noise_level": 0.005,
+    "metrics": {
+      "model_name": "QSVM (p=0.005)",
+      "f1_macro": 0.9348450176825462,
+      "f1_fraud": 0.9052631578947369,
+      "pr_auc": 0.9516337420971147,
+      "roc_auc": 0.962530612244898,
+      "mcc": 0.8705598459786357,
+      "accuracy": 0.9482758620689655
+    }
+  }
+]
