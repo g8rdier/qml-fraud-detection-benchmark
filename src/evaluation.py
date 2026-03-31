@@ -242,9 +242,9 @@ def plot_confusion_matrices(
         If False (default), display raw counts.
     """
     n = len(models)
-    fig, axes = plt.subplots(1, n, figsize=(5.5 * n, 4.5))
-    if n == 1:
-        axes = [axes]
+    # Use 2x2 grid for better readability
+    fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+    axes = axes.flatten()
 
     for ax, m in zip(axes, models):
         cm = confusion_matrix(m["y_true"], m["y_pred"])
@@ -262,12 +262,16 @@ def plot_confusion_matrices(
 
         # Add sample size and model name to title
         title = f"{m['name']}\n(n={n_samples:,})"
-        ax.set_title(title, fontsize=11, fontweight='bold')
+        ax.set_title(title, fontsize=12, fontweight='bold')
 
         # Adjust text formatting for normalized matrices
         if normalize:
             ax.set_xlabel("Predicted label (%)")
             ax.set_ylabel("True label (%)")
+
+    # Hide unused axes
+    for ax in axes[n:]:
+        ax.set_visible(False)
 
     fig.suptitle(
         "Confusion Matrices" + (" — Normalized (%)" if normalize else ""),
