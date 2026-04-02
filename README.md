@@ -20,13 +20,31 @@
 
 ## Key Hypotheses
 
-**H0₁:** QSVM achieves no statistically significant difference in F1-Fraud score compared to the best classical baseline (XGBoost).
+Three central hypothesis pairs are derived from theoretical analysis of NISQ hardware constraints, the mathematical structure of quantum feature spaces, and the specifics of fraud detection.
 
-**H1₁:** QSVM achieves a significantly different F1-Fraud score compared to XGBoost.
+### H1: Classification Performance Under Extreme Class Imbalance
 
-**H0₂:** Quantum models require equal or less computational time than classical models.
+**H0₁:** QSVM achieves no statistically significant difference in MCC compared to the classical baseline XGBoost.
 
-**H1₂:** Quantum models require significantly more computational time due to quantum simulation overhead.
+**H1₁:** QSVM achieves a significantly different MCC compared to XGBoost.
+
+*Rationale:* The primary metric is Matthews Correlation Coefficient (MCC), which is more informative than F1 for heavily imbalanced datasets. This hypothesis directly addresses whether quantum kernels can compete with classical ensemble methods on a real fraud detection task.
+
+### H2: Noise Robustness Under Realistic Hardware Conditions
+
+**H0₂:** Quantum models exhibit identical error tolerance across depolarizing noise levels p ∈ [0.0, 0.05].
+
+**H1₂:** QSVM and VQC exhibit significantly different degradation patterns with increasing depolarizing noise.
+
+*Rationale:* Mathematical analysis suggests QSVM should degrade gracefully due to kernel structure stability, while VQC is expected to hit a performance floor early due to barren plateau effects. This tests whether theoretical noise resilience translates to empirical robustness.
+
+### H3: Operational Efficiency
+
+**H0₃:** Hybrid quantum-classical methods require equal or less computational time for training and inference than classical ensemble methods.
+
+**H1₃:** Hybrid quantum-classical methods require significantly more computational time than classical baselines, despite theoretical quantum acceleration potential.
+
+*Rationale:* Classical simulators execute quantum circuits on CPUs, introducing overhead that negates theoretical speedup. This hypothesis evaluates the practical cost of quantum simulation on available hardware.
 
 ---
 
