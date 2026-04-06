@@ -1,0 +1,9 @@
+============================================================
+  QML Noise Sweep — Queued Mode (batches of 2)
+  Started: Sun Mar 15 07:56:55 CET 2026
+============================================================
+
+[07:56:55] Batch: noise_levels = 0.0 0.001
+  Launching p=0.0 → results/noise/p0.0
+  Launching p=0.001 → results/noise/p0.001
+  [08:04:41] PID 64839 done ✓

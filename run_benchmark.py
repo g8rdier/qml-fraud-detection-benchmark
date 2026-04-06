@@ -40,6 +40,7 @@ from src.evaluation import (
     evaluate_model,
     plot_calibration_curves,
     plot_confusion_matrices,
+    plot_confusion_matrices_quantum_focus,
     plot_metric_comparison,
     plot_pr_curves,
     plot_roc_curves,
@@ -324,6 +325,7 @@ def _generate_plots(plot_data: list[dict], results: list[ModelMetrics]) -> None:
     plot_pr_curves(plot_data,        save_path=FIGURES_DIR / "pr_curves.png")
     plot_roc_curves(plot_data,       save_path=FIGURES_DIR / "roc_curves.png")
     plot_confusion_matrices(plot_data, save_path=FIGURES_DIR / "confusion_matrices.png")
+    plot_confusion_matrices_quantum_focus(plot_data, save_path=FIGURES_DIR / "confusion_matrices_quantum_focus.png")
     plot_metric_comparison(results,  save_path=FIGURES_DIR / "metric_comparison.png")
     plot_calibration_curves(plot_data, save_path=FIGURES_DIR / "calibration_curves.png")
 

@@ -1,0 +1,82 @@
+07:56:58 | INFO     | Preprocessing…
+07:56:58 | INFO     | Loading dataset from data/raw/creditcard.csv
+07:56:59 | INFO     | Raw shape: (284807, 31) | Fraud rate: 0.1727%
+07:56:59 | INFO     | Dropping columns: ['Time']
+07:56:59 | INFO     | Original class counts: {np.int64(0): np.int64(284315), np.int64(1): np.int64(492)}
+07:56:59 | INFO     | Split — train: 193668 | val: 34177 | test: 56962 samples
+07:56:59 | INFO     | Applying SMOTE (k_neighbors=5) ...
+07:56:59 | INFO     | After SMOTE — class distribution: {np.int64(0): np.int64(193333), np.int64(1): np.int64(193333)}
+07:56:59 | INFO     | PCA: 8 components retain 94.63% of variance
+07:56:59 | INFO     | Preprocessing complete. Final feature dim: 8
+07:56:59 | INFO     | Evaluating classical baselines…
+07:56:59 | INFO     | 
+[Random Forest]
+  F1 (macro)  : 0.9440
+  F1 (fraud)  : 0.9171
+  PR-AUC      : 0.9737
+  ROC-AUC     : 0.9831
+  MCC         : 0.8939
+  Accuracy    : 0.9569  (reference only)
+
+07:56:59 | INFO     | 
+[XGBoost]
+  F1 (macro)  : 0.9483
+  F1 (fraud)  : 0.9239
+  PR-AUC      : 0.9677
+  ROC-AUC     : 0.9742
+  MCC         : 0.9003
+  Accuracy    : 0.9598  (reference only)
+
+07:56:59 | INFO     | 
+==================================================
+  noise_level = 0.0000
+==================================================
+07:56:59 | INFO     | VQC training: 30 epochs, 8 qubits, 2 layers
+07:57:33 | INFO     |   Epoch  10/30 | loss=0.9132
+07:58:07 | INFO     |   Epoch  20/30 | loss=0.8449
+07:58:40 | INFO     |   Epoch  30/30 | loss=0.7711
+/Users/gregorkobilarov/qml-fraud-detection-benchmark/src/evaluation.py:58: RuntimeWarning: invalid value encountered in divide
+  2 * precisions[:-1] * recalls[:-1] / (precisions[:-1] + recalls[:-1]),
+08:01:10 | INFO     | Optimal threshold: 0.4720  →  val precision=0.0321  recall=0.5932  F1=0.0608
+08:01:11 | INFO     | 
+[VQC (p=0.0)]
+  F1 (macro)  : 0.8022
+  F1 (fraud)  : 0.6988
+  PR-AUC      : 0.7853
+  ROC-AUC     : 0.8748
+  MCC         : 0.6260
+  Accuracy    : 0.8563  (reference only)
+
+08:01:11 | INFO     | VQC  p=0.0000 | F1-fraud=0.6988 MCC=0.6260 | 252.0 s
+08:01:11 | INFO     | QSVM: computing 100x100 kernel matrix (train)…
+08:04:40 | INFO     | 
+[QSVM (p=0.0)]
+  F1 (macro)  : 0.9348
+  F1 (fraud)  : 0.9053
+  PR-AUC      : 0.9521
+  ROC-AUC     : 0.9630
+  MCC         : 0.8706
+  Accuracy    : 0.9483  (reference only)
+
+08:04:40 | INFO     | QSVM p=0.0000 | F1-fraud=0.9053 MCC=0.8706 | 208.5 s
+08:04:40 | INFO     | Total sweep time: 7.7 min
+08:04:40 | INFO     | Results saved to results/noise/p0.0/noise_results.json
+
+╔══════════════════════════════════════════════════════╗
+║  QML Fraud Detection — Noise Sweep                  ║
+║  Levels: [0.0]
+╚══════════════════════════════════════════════════════╝
+
+
+Noise Sweep Summary — F1-Fraud
+
+Model     p=0.000
+--------------------
+VQC         0.6988
+QSVM        0.9053
+
+Classical baselines (noise-independent):
+  Random Forest        F1-fraud=0.9171
+  XGBoost              F1-fraud=0.9239
+
+Noise sweep complete. Results saved to results/noise/p0.0/

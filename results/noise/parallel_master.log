@@ -1,0 +1,14 @@
+============================================================
+  QML Noise Sweep — Parallel Mode (6 levels)
+  Started: Sun Mar 15 07:47:40 CET 2026
+============================================================
+  Launching noise_level=0.0 → results/noise/p0.0
+  Launching noise_level=0.001 → results/noise/p0.001
+  Launching noise_level=0.005 → results/noise/p0.005
+  Launching noise_level=0.01 → results/noise/p0.01
+  Launching noise_level=0.02 → results/noise/p0.02
+  Launching noise_level=0.05 → results/noise/p0.05
+
+All 6 processes launched. Waiting for completion...
+Monitor with: tail -f results/noise/p*/run.log
+
