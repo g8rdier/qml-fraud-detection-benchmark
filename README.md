@@ -52,15 +52,17 @@ Three central hypothesis pairs are derived from theoretical analysis of NISQ har
 
 **Quantum advantage was not demonstrated in this setting.**
 
-| Model | F1-Fraud | MCC | ROC-AUC | PR-AUC |
+| Model | MCC | PR-AUC | F1-Fraud | ROC-AUC |
 |---|---|---|---|---|
-| XGBoost | **0.924** | **0.900** | 0.974 | 0.968 |
-| Random Forest | 0.917 | 0.894 | **0.983** | **0.974** |
-| QSVM (p=0.0) | 0.905 | 0.871 | 0.963 | 0.952 |
-| VQC (p=0.0) | 0.699 | 0.626 | 0.875 | 0.785 |
+| XGBoost | **0.900** | 0.968 | 0.924 | 0.974 |
+| Random Forest | 0.894 | **0.974** | 0.917 | 0.983 |
+| QSVM (p=0.0) | 0.871 | 0.952 | 0.905 | 0.963 |
+| VQC (p=0.0) | 0.626 | 0.785 | 0.699 | 0.875 |
 
-- **QSVM** is competitive — within ~1.3% F1 of Random Forest at zero noise — but does not exceed classical baselines.
-- **VQC** underperforms significantly (~22% below XGBoost). The bottleneck is model capacity (8 qubits / 30 epochs), not noise.
+MCC and PR-AUC are the primary metrics — they account for extreme class imbalance (0.17% fraud). F1-Fraud and ROC-AUC are provided for reference.
+
+- **QSVM** is competitive — within 0.029 MCC of XGBoost (0.871 vs 0.900) using only 300 training samples vs ~155,000 — but does not exceed classical baselines.
+- **VQC** underperforms significantly — 0.274 MCC below XGBoost (0.626 vs 0.900). The bottleneck is model capacity (8 qubits / 30 epochs), not noise.
 - Both quantum models remain below classical at all depolarizing noise levels tested (p = 0.0 → 0.05).
 
 See the [noise sweep results notebook](notebooks/02_noise_sweep_results.ipynb) for the full analysis.
@@ -81,7 +83,7 @@ This repository implements a rigorous benchmarking framework comparing quantum a
 The benchmark is designed around the specific challenges of financial fraud detection:
 - **Extreme class imbalance** (~0.17% fraud in the reference dataset)
 - **High dimensionality** vs. the limited qubit count of NISQ simulators
-- **Rigorous metrics** — F1-Fraud, MCC, PR-AUC, ROC-AUC (accuracy is reported as reference only)
+- **Rigorous metrics** — MCC and PR-AUC as primary (robust to class imbalance); F1-Fraud and ROC-AUC as secondary reference
 
 ---
 
@@ -117,7 +119,7 @@ qml-fraud-detection-benchmark/
 ├── results/
 │   ├── figures/                    # Benchmark and ablation plots
 │   └── noise/
-│       └── noise_vs_metric.png     # Noise sweep: F1-Fraud and MCC vs p
+│       └── noise_vs_metric.png     # Noise sweep: MCC and PR-AUC vs p
 ├── src/
 │   ├── data_loader.py              # Dataset verification
 │   ├── preprocessing.py            # Scaling · SMOTE · PCA pipeline
@@ -200,14 +202,16 @@ Depolarizing noise was swept across `p = [0.0, 0.001, 0.005, 0.01, 0.02, 0.05]`.
 
 ![Noise sweep results](results/noise/noise_vs_metric.png)
 
-| Model | p=0.0 | p=0.001 | p=0.01 | p=0.05 |
-|---|---|---|---|---|
-| QSVM | 0.905 | 0.905 | 0.905 | 0.881 |
-| VQC  | 0.699 | 0.699 | 0.699 | 0.707 |
+| Model | Metric | p=0.0 | p=0.001 | p=0.01 | p=0.05 |
+|---|---|---|---|---|---|
+| QSVM | MCC | 0.871 | 0.871 | 0.871 | 0.835 |
+| QSVM | PR-AUC | 0.952 | 0.952 | 0.951 | 0.932 |
+| VQC | MCC | 0.626 | 0.626 | 0.626 | — |
+| VQC | PR-AUC | 0.785 | 0.786 | 0.786 | — |
 
-**QSVM** degrades gracefully — only ~2.7% F1 drop from p=0.0 to p=0.05. **VQC** shows no meaningful noise degradation because it is already at its performance floor.
+**QSVM** degrades gracefully — MCC drops 0.036 (0.871 → 0.835) and PR-AUC drops 0.020 (0.952 → 0.932) from p=0.0 to p=0.05. The break-even point is p ≈ 0.02, which is above the ~p=0.001 gate error rates of current superconducting hardware. **VQC** shows no meaningful degradation because it is already at its performance floor (MCC 0.626).
 
-At current best NISQ hardware noise (p ≈ 0.001), QSVM achieves F1-fraud = 0.905, remaining ~2% below Random Forest.
+At current best NISQ hardware noise (p ≈ 0.001), QSVM achieves MCC = 0.871, PR-AUC = 0.952 — within 0.029 MCC of XGBoost.
 
 ---
 
@@ -217,7 +221,7 @@ An ablation study systematically varies one component to measure its effect — 
 
 ![Qubit ablation results](results/ablation/metric_vs_qubits.png)
 
-**QSVM** is essentially flat across the entire sweep (F1-fraud ~0.85–0.91). More qubits yield no meaningful gain, and performance dips slightly at 10–12 qubits. Two reasons:
+**QSVM** is essentially flat across the entire sweep (MCC ~0.83–0.87). More qubits yield no meaningful gain, and performance dips slightly at 10–12 qubits. Two reasons:
 
 - **Concentration of measure.** As the quantum circuit grows, kernel values K(x, x') converge toward the same number — data points become indistinguishable in Hilbert space, degrading the kernel's ability to separate fraud from non-fraud. This is a known fundamental limitation of large quantum kernels.
 - **Diminishing PCA signal.** Each extra qubit adds one more PCA component, but later components capture less and less variance. At 12 qubits the model is partially trained on noise.
@@ -268,7 +272,7 @@ pytest tests/ -v
 
 ## Limitations
 
-**Constrained comparison.** Classical models (RF, XGBoost) were trained on the same PCA-reduced feature space as the quantum models — 8 components out of 30 original features. This is necessary for a like-for-like input comparison, but it handicaps classical models that are designed to exploit the full feature set. Unconstrained XGBoost on all 30 features typically achieves F1-fraud of 0.93–0.96 on this dataset, wider than the gap measured here. The benchmark answers the question *"how close can quantum get given NISQ hardware constraints?"* — not *"is quantum better than classical in absolute terms?"*
+**Constrained comparison.** Classical models (RF, XGBoost) were trained on the same PCA-reduced feature space as the quantum models — 8 components out of 30 original features. This is necessary for a like-for-like input comparison, but it handicaps classical models that are designed to exploit the full feature set. Unconstrained XGBoost on all 30 features typically achieves MCC above 0.90 and F1-fraud of 0.93–0.96 on this dataset, making the actual gap wider than measured here. The benchmark answers the question *"how close can quantum get given NISQ hardware constraints?"* — not *"is quantum better than classical in absolute terms?"*
 
 ---
 
