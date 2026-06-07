@@ -1,0 +1,26 @@
+cff-version: 1.2.0
+message: "If you use this work, please cite it as below."
+type: software
+title: "QML Fraud Detection Benchmark"
+abstract: >
+  Potential Analysis of Quantum Machine Learning (QML) for Fraud Detection.
+  Benchmarks Quantum Kernel Methods (QSVM) and Variational Quantum Circuits (VQC)
+  against classical ensemble methods (XGBoost, Random Forest) on the Kaggle Credit
+  Card Fraud Detection dataset under realistic NISQ noise conditions.
+authors:
+  - family-names: Kobilarov
+    given-names: Gregor
+    affiliation: "IU International University of Applied Sciences"
+date-released: 2026-03-31
+version: v2.0
+doi: 10.5281/zenodo.19474867
+license: CC-BY-4.0
+repository-code: "https://github.com/g8rdier/qml-fraud-detection-benchmark"
+keywords:
+  - Quantum Machine Learning
+  - Fraud Detection
+  - Financial Services
+  - NISQ
+  - Hybrid Quantum Neural Networks
+  - QSVM
+  - VQC

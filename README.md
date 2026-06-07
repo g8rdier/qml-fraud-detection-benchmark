@@ -1,5 +1,7 @@
 # QML Fraud Detection Benchmark
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19474867.svg)](https://doi.org/10.5281/zenodo.19474867)
+
 ## Academic Context
 
 | | |
